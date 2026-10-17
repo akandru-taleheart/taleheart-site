@@ -55,7 +55,6 @@ export default async (req) => {
         model: "gpt-6-luna",
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
         max_completion_tokens: 500,
-        //temperature: 0.9,
       }),
     });
 
