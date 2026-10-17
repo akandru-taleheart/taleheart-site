@@ -1,4 +1,4 @@
-/ TaleHeart AI brain — Netlify serverless function
+// TaleHeart AI brain — Netlify serverless function
 // POST /.netlify/functions/taleheart  with JSON body { messages: [{role, content}, ...] }
 // Returns { reply: "..." } or { error: "missing_key" } (HTTP 503) when OPENAI_API_KEY is not set.
 
