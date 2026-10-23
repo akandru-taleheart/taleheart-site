@@ -396,6 +396,7 @@
       var storyMoral = document.getElementById('storyMoral');
       var storyMoralText = document.getElementById('storyMoralText');
       var fallbackStory = { title: storyTitle.textContent, copyHTML: storyCopy.innerHTML, moral: storyMoralText.textContent };
+      var fallbackChoices = Array.prototype.map.call(document.querySelectorAll('#choices .choice'), function (b) { return b.textContent; });
       var storyForLength = -1;
       var storyPending = false;
       var storyRequestId = 0;
@@ -481,15 +482,37 @@
         }, 430);
       }
 
+      function renderChoices(list) {
+        var row = document.getElementById('choices');
+        row.innerHTML = '';
+        list.forEach(function (label) {
+          var b = document.createElement('button');
+          b.className = 'choice';
+          b.textContent = label;
+          b.addEventListener('click', function () {
+            row.querySelectorAll('.choice').forEach(function (x) { x.classList.remove('selected'); });
+            b.classList.add('selected');
+          });
+          row.appendChild(b);
+        });
+      }
+
       function restoreFallbackStory() {
         storyTitle.textContent = fallbackStory.title;
         storyCopy.innerHTML = fallbackStory.copyHTML;
         storyMoral.hidden = false;
         storyMoralText.textContent = fallbackStory.moral;
+        renderChoices(fallbackChoices);
       }
 
       function renderStory(reply) {
         var text = String(reply).replace(/\r\n/g, '\n').replace(/\*\*/g, '').trim();
+        var choices = [];
+        text = text.split('\n').filter(function (line) {
+          var cm = line.match(/^\s*choice\s*[:\-—]\s*(.+)$/i);
+          if (cm) { choices.push(cm[1].trim()); return false; }
+          return true;
+        }).join('\n').trim();
         var moral = '';
         var moralAt = text.search(/\bmoral\s*[:\-—]/i);
         if (moralAt !== -1) {
@@ -522,6 +545,11 @@
         } else {
           storyMoral.hidden = true;
         }
+        if (choices.length >= 2) {
+          renderChoices(choices.slice(0, 3));
+        } else {
+          renderChoices(fallbackChoices);
+        }
       }
 
       function loadStory() {
@@ -535,7 +563,7 @@
         storyMoral.hidden = true;
         var storyMessages = history.concat([{
           role: 'user',
-          content: 'Now it is time for the story mirror. Please write a short, original story — about three short paragraphs — about a character who is facing what I have been describing, seen from a gentle distance (not me directly). Give the story a short title on its own first line. End with a final line that begins with "Moral:" followed by one gentle sentence of wisdom drawn from my situation. Write only the title, the story, and the moral line.'
+          content: 'Now it is time for the story mirror. Please write a short, original story — about three short paragraphs — about a character who is facing what I have been describing, seen from a gentle distance (not me directly). Give the story a short title on its own first line. End with a final line that begins with "Moral:" followed by one gentle sentence of wisdom drawn from my situation. After the moral line, add three lines that each begin with "Choice:" — three short first-person options, a few words each, naming moments or feelings from the story you just wrote that I might recognize in my own experience. Write only the title, the story, the moral line, and the three choice lines.'
         }]);
         fetch('/.netlify/functions/taleheart', {
           method: 'POST',
