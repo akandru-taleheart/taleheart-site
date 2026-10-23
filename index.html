@@ -349,8 +349,8 @@
         <div class="reflection-grid">
           <div class="insight-sheet">
             <div class="insight"><div class="insight-label">FEELING</div><p id="feelingText">You may be feeling unseen and uncertain.</p></div>
-            <div class="insight"><div class="insight-label">WHAT IT MAY BE PROTECTING</div><p>The wish to know that you matter without having to prove it.</p></div>
-            <div class="insight"><div class="insight-label">A DIFFERENT QUESTION</div><p>“What would caring for myself look like before I look for reassurance?”</p></div>
+            <div class="insight"><div class="insight-label">WHAT IT MAY BE PROTECTING</div><p id="protectingText">The wish to know that you matter without having to prove it.</p></div>
+            <div class="insight"><div class="insight-label">A DIFFERENT QUESTION</div><p id="questionText">“What would caring for myself look like before I look for reassurance?”</p></div>
           </div>
           <aside class="practice">
             <h2>Try one honest sentence</h2>
@@ -399,6 +399,9 @@
       var storyForLength = -1;
       var storyPending = false;
       var storyRequestId = 0;
+      var reflectionForLength = -1;
+      var reflectionPending = false;
+      var reflectionRequestId = 0;
       var history = [{ role: 'assistant', content: 'Take your time. Start wherever the story begins for you.' }];
       var noteDismissed = false;
       var turn = 0;
@@ -416,6 +419,7 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
         if (id === 'talk') setTimeout(function () { input.focus(); }, 200);
         if (id === 'story') loadStory();
+        if (id === 'reflect') loadReflection();
       }
 
       function addMessage(kind, text) {
@@ -555,6 +559,75 @@
         });
       }
 
+      function renderReflection(reply) {
+        var text = String(reply).replace(/\r\n/g, '\n').replace(/\*\*/g, '').trim();
+        var fields = {};
+        var current = null;
+        text.split('\n').forEach(function (line) {
+          var m = line.match(/^\s*(feeling|protecting|question|sentence)\s*:\s*(.*)$/i);
+          if (m) {
+            current = m[1].toLowerCase();
+            fields[current] = m[2].trim();
+          } else if (current && line.trim()) {
+            fields[current] += ' ' + line.trim();
+          }
+        });
+        if (!fields.feeling || !fields.sentence) return false;
+        document.getElementById('feelingText').textContent = fields.feeling;
+        if (fields.protecting) document.getElementById('protectingText').textContent = fields.protecting;
+        if (fields.question) document.getElementById('questionText').textContent = fields.question;
+        var sentence = fields.sentence.trim();
+        if (!/^[“"]/.test(sentence)) sentence = '“' + sentence.replace(/[”"]\s*$/, '') + '”';
+        document.getElementById('scriptLine').textContent = sentence;
+        return true;
+      }
+
+      function restoreReflection(saved) {
+        document.getElementById('feelingText').textContent = saved.feeling;
+        document.getElementById('protectingText').textContent = saved.protecting;
+        document.getElementById('questionText').textContent = saved.question;
+        document.getElementById('scriptLine').textContent = saved.line;
+      }
+
+      function loadReflection() {
+        var hasUser = history.some(function (m) { return m.role === 'user'; });
+        if (!hasUser || reflectionPending || reflectionForLength === history.length) return;
+        reflectionPending = true;
+        reflectionForLength = history.length;
+        var requestId = ++reflectionRequestId;
+        var feelingEl = document.getElementById('feelingText');
+        var protectingEl = document.getElementById('protectingText');
+        var questionEl = document.getElementById('questionText');
+        var scriptEl = document.getElementById('scriptLine');
+        var saved = { feeling: feelingEl.textContent, protecting: protectingEl.textContent, question: questionEl.textContent, line: scriptEl.textContent };
+        feelingEl.textContent = 'Gathering your reflection…';
+        protectingEl.textContent = '…';
+        questionEl.textContent = '…';
+        scriptEl.textContent = '…';
+        var reflectionMessages = history.concat([{
+          role: 'user',
+          content: 'Now it is time for my reflection. Based on everything I have shared in this conversation, reply with exactly four lines and nothing else, in this exact format:\nFeeling: one sentence naming what I may be feeling and why it matters to me.\nProtecting: one sentence on what this feeling may be protecting — the wish or need underneath it.\nQuestion: one gentle question, in double quotes, that I could ask myself instead of seeking reassurance.\nSentence: one honest sentence, in double quotes, that I could say out loud to express what is true for me without accusing, defending, or shrinking.\nWrite only those four labeled lines.'
+        }]);
+        fetch('/.netlify/functions/taleheart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: reflectionMessages })
+        }).then(function (res) {
+          if (!res.ok) throw new Error('live backend unavailable');
+          return res.json();
+        }).then(function (data) {
+          reflectionPending = false;
+          if (requestId !== reflectionRequestId) return;
+          if (!(data && typeof data.reply === 'string' && data.reply.trim() && renderReflection(data.reply))) {
+            restoreReflection(saved);
+          }
+        }).catch(function () {
+          reflectionPending = false;
+          if (requestId !== reflectionRequestId) return;
+          restoreReflection(saved);
+        });
+      }
+
       function send(text) {
         text = text.trim(); if (!text) return;
         lastText = text;
@@ -609,8 +682,11 @@
         history = [{ role: 'assistant', content: 'Take your time. Start wherever the story begins for you.' }];
         noteDismissed = false; liveNote.hidden = true;
         storyForLength = -1; storyPending = false; storyRequestId += 1; restoreFallbackStory();
+        reflectionForLength = -1; reflectionPending = false; reflectionRequestId += 1;
         messages.innerHTML = '<div class="message assistant"><div class="voice">Companion</div><p class="assistant-copy">Take your time. Start wherever the story begins for you.</p></div>';
         document.getElementById('feelingText').textContent = 'You may be feeling unseen and uncertain.';
+        document.getElementById('protectingText').textContent = 'The wish to know that you matter without having to prove it.';
+        document.getElementById('questionText').textContent = '“What would caring for myself look like before I look for reassurance?”';
         document.getElementById('scriptLine').textContent = '“I notice I’m feeling uncertain, and I need a little clarity before we move on.”';
         document.querySelectorAll('.choice').forEach(function (x) { x.classList.remove('selected'); });
         showView('welcome');
